@@ -1,0 +1,26 @@
+deployment_name,pad_name,pad_lat,pad_lon,camml_lat,camml_lon,operational_phase,distance_to_source_ft,source_direction_degrees,deployment_id
+Crestone_Woolley Sosa_Drilling,Woolley Sosa,NA,NA,40.06,-105.06,Drilling,NA,NA,1
+Crestone_Waste Connections_Drilling,Waste Connections,40.02,-105.03,40.01,-105.03,Drilling,1842,14,2
+Crestone_Pratt_Drilling,Pratt,40.02,-105.02,40.01,-105.02,Drilling,1146,34,3
+Crestone_Pratt_Hydraulic Fracturing,Pratt,40.02,-105.02,40.01,-105.02,Hydraulic Fracturing,1147,34,4
+Crestone_Pratt_FlowBack,Pratt,40.02,-105.02,40.01,-105.02,FlowBack,1146,34,5
+N/A_Platteville_Weld County Regional,Platteville,NA,NA,40.18,-104.73,Weld County Regional,NA,NA,6
+N/A_Platteville_Weld County Regional,Platteville,NA,NA,40.18,-104.73,Weld County Regional,NA,NA,7
+Great Western_Dittmer_Drilling,Dittmer,40.01,-104.8,40.01,-104.8,Drilling,1518,255,8
+Extraction_Livingston_Baseline (Fall),Livingston,39.98,-105.04,39.98,-105.04,Baseline (Fall),0,#DIV/0!,9
+Extraction_Rinn Valley_Flowback,Rinn Valley,40.13,-105.04,40.13,-105.06,Flowback,4310,86,10
+Extraction_Vetting_Baseline,Vetting,40.4,-104.66,40.41,-104.66,Baseline,1585,197,11
+Extraction_Vetting_Hydraulic Fracturing,Vetting,40.4,-104.66,40.41,-104.66,Hydraulic Fracturing,1590,197,12
+Extraction_Livingston_Baseline (Summer),Livingston,39.98,-105.04,39.98,-105.04,Baseline (Summer),670,103,13
+Extraction_Livingston_Drilling,Livingston,39.98,-105.04,39.98,-105.04,Drilling,674,104,14
+Extraction_Vetting_Mill Out,Vetting,40.4,-104.66,40.41,-104.66,Mill Out,1589,196,15
+Extraction_Vetting_Flowback/Production,Vetting,40.4,-104.66,40.41,-104.66,Flowback/Production,1589,196,16
+Extraction_Vetting_Flowback/Production,Vetting,40.4,-104.66,40.41,-104.66,Flowback/Production,1589,197,17
+Extraction_Livingston_Hydraulic Fracturing,Livingston,39.98,-105.04,39.98,-105.04,Hydraulic Fracturing,675,104,18
+Extraction_Livingston_Mill Out,Livingston,39.98,-105.04,39.98,-105.04,Mill Out,675,104,19
+Extraction_Livingston_Flowback/Production,Livingston,39.98,-105.04,39.98,-105.04,Flowback/Production,678,105,20
+Extraction_Vetting_Production,Vetting,40.4,-104.66,40.41,-104.66,Production,1589,197,21
+Great Western_Ivey_Drilling,Ivey,39.97,-104.97,39.97,-104.97,Drilling,1035,50,22
+Cub Creek_Knight_Drilling,Knight,40.2,-105.04,40.2,-105.04,Drilling,556,76,23
+CC-ND_Eagle Pointe (Suncor)_N/A,Eagle Pointe (Suncor),39.8,-104.94,39.81,-104.93,N/A,5076,254,24
+CubCreek_Knight_Flowback/Production,Knight,40.2,-105.04,40.2,-105.04,Flowback/Production,544,78,25
