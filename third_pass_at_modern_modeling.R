@@ -166,7 +166,9 @@ ggplot(data_training, aes(x = WindSpeed)) +
 data_spod_training = data_training |>
   select(-(SolarRadiation:v)) |>
   na.omit()
-
+data_spod_testing = data_testing |>
+  select(-(SolarRadiation:v)) |>
+  na.omit()
 ### Creating cross-folds ----
 folds_spod_training = group_vfold_cv(data_spod_training, group = deployment_id)
 
@@ -228,7 +230,7 @@ fit_resamples(rf_mod, rec_spod_v1, resamples = folds_spod_training) |>
 # The random forest does a lot better though: RMSE of 0.48, r2 = 0.38
 
 ### Tune the random forest model:
-cl <- makePSOCKcluster(2)
+cl <- makePSOCKcluster(6)
 registerDoParallel(cl)
 
 rf_tune = parsnip::rand_forest(trees = 1000, mtry = tune(), min_n = tune()) |>
@@ -240,7 +242,7 @@ rf_tune = parsnip::rand_forest(trees = 1000, mtry = tune(), min_n = tune()) |>
 set.seed(1542385)
 ranger_tune = tune_grid(rf_tune, rec_spod_v1, resamples = folds_spod_training, grid = 15)
 
-stopCluster(cl)
+# stopCluster(cl)
 
 autoplot(ranger_tune)
 collect_metrics(ranger_tune) |>
@@ -276,7 +278,25 @@ ggplot(data_spod_training, aes(x = tvoc, y = benzene)) +
 # Maybe more on the ceiling of the relationship.
 
 ### Can we use xgbooost? ----
-xgb_mod = parsnip::boost_tree(
+xgb_fit1 = parsnip::boost_tree(
+  trees = 1500,
+  mtry = 10,
+  min_n = 10,
+  learn_rate = 0.01
+) |>
+  set_engine("xgboost") |>
+  set_mode("regression")
+
+rec_spod_xgb = rec_spod_v1 |>
+  step_dummy(all_nominal_predictors())
+xgb_resamples = fit_resamples(xgb_fit1, rec_spod_xgb, resamples = folds_spod_training)
+xgb_resamples |>
+  collect_metrics()
+# Bit of an improvement over the random forest: rmse of 0.44, r2 of 0.41
+
+
+#### Can we tune?
+xgb_tune = parsnip::boost_tree(
   trees = tune(),
   mtry = tune(),
   min_n = tune(),
@@ -284,3 +304,265 @@ xgb_mod = parsnip::boost_tree(
 ) |>
   set_engine("xgboost") |>
   set_mode("regression")
+
+
+library(finetune)
+set.seed(6789)
+xgb_tune_res = tune_race_anova(xgb_tune, rec_spod_xgb, resamples = folds_spod_training,
+                               grid = 40, control_race(verbose_elim = TRUE))
+xgb_tune_res
+
+# That was really quick! Let's try to take a look at the results
+plot_race(xgb_tune_res)
+show_best(xgb_tune_res, metric = "rmse")
+autoplot(xgb_tune_res)
+# What does it mean that the best results happened so early and then the results got worse?
+
+# Ok, I don't quite get tune_race_anova. So let's skip the fancy tuning algorithm and just
+# use tune().
+xgb_tune_res2 = tune_grid(xgb_tune, rec_spod_xgb, resamples = folds_spod_training,
+                               grid = 20)
+autoplot(xgb_tune_res2)
+
+# Let's try to control this more and do a full grid...but we don't want much more than 20 options
+library(yardstick)
+xgb_tune_res3 = tune_grid(xgb_tune, rec_spod_xgb, resamples = folds_spod_training,
+                         grid = crossing(mtry = c(5, 10, 20),
+                                         trees = seq(100, 1600, by = 150),
+                                         min_n = c(5, 10, 20)),
+                         metrics = yardstick::metric_set(rmse))
+autoplot(xgb_tune_res3)
+
+# Let's try expanding out to even more parameters that we could tune and leaving the full
+# grid behind:
+xgb_tune2 = parsnip::boost_tree(
+  trees = 1000,
+  tree_depth = tune(),
+  min_n = tune(),
+  loss_reduction = tune(),
+  sample_size = tune(),
+  mtry = tune(),
+  learn_rate = tune(),  #https://juliasilge.com/blog/xgboost-tune-volleyball/
+) |>
+  set_engine("xgboost") |>
+  set_mode("regression")
+
+library(dials)
+baked_data_following_xgb = prep(rec_spod_xgb, data = data_spod_training) |>
+  bake(new_data = NULL, all_predictors())
+
+param_set =
+  xgb_tune2 |>
+  extract_parameter_set_dials() |>
+  finalize(x = baked_data_following_xgb)
+
+xgb_parameter_combos =
+  grid_latin_hypercube(
+    param_set, #I'm not really sure what black magic is going on here and how we're automatically coming up with the parameter ranges...
+      size = 70)
+
+
+xgb_tune_res4 = tune_grid(xgb_tune2, rec_spod_xgb, resamples = folds_spod_training,
+                          grid = xgb_parameter_combos)
+# I don't really understand how long it takes to train various models - this seems like it
+# should take the same amount of time as xgb_tune_res3, but it's taking a lot longer.
+
+collect_metrics(xgb_tune_res4)
+show_best(xgb_tune_res4, "rmse")
+show_best(xgb_tune_res4, "rsq")
+select_best(xgb_tune_res4, "rmse")
+# I like the 2nd best option the best - it has was seems to be more reasonable numbers for
+# min_n and learn_rate.
+
+wanted_params = show_best(xgb_tune_res4, "rmse")[2, ]
+wanted_params
+xgb_tune3 = finalize_model(xgb_tune2,
+               wanted_params)
+# Now run on the full training dataset and collect predictions:
+baked_data_following_xgb2 = prep(rec_spod_xgb, data = data_spod_training) |>
+  bake(new_data = NULL, all_predictors(), all_outcomes())
+xgb_fit2 = fit(xgb_tune3, benzene ~ ., data = baked_data_following_xgb2)
+vip(xgb_fit2, geom = "point")
+
+# Ok, that's quite interesting. We've gotten that the tvoc_sd and WindSpeed are the two
+# best predictors.
+# I'm curious about these week-long predictors. What exactly are they picking up on?
+
+ggplot(baked_data_following_xgb2, aes(x = `P(barometric)_week`, y = benzene)) +
+  geom_point()
+ggplot(baked_data_following_xgb2, aes(x = `T(ambient)_week`, y = benzene)) +
+  geom_point()
+# There's definitely some structure, but it's really hard to see.
+
+### SHAP values for xgboost? ----
+# I don't really understand what SHAP is, but it seems to be a useful tool for
+# understanding xgboost models.
+library("SHAPforxgboost")
+
+xgb_eng = extract_fit_engine(xgb_fit2)
+baked_data_for_shap = prep(rec_spod_xgb, data = data_spod_training) |>
+  bake(new_data = NULL,
+       all_predictors(),
+       composition = "matrix")
+# have to do some manual adjustments to the column names
+cn = colnames(baked_data_for_shap)
+cn[grepl("[(]", cn)] = paste0("`", cn[grepl("[(]", cn)], "`")
+colnames(baked_data_for_shap) = cn
+
+shap_info =
+  shap.prep(
+    xgb_model = extract_fit_engine(xgb_fit2),
+    X_train = baked_data_for_shap
+  )
+shap_info
+shap.plot.summary(shap_info)
+shap.plot.dependence(shap_info, x = "tvoc_sd")
+shap.plot.dependence(shap_info, x = "WindSpeed")
+shap.plot.dependence(shap_info, x = "WindSpeed",
+                     smooth = FALSE, add_hist = TRUE)
+
+shap.plot.dependence(shap_info, x = "WindSpeed", color_feature = "tvoc_sd",
+                     smooth = FALSE, add_hist = TRUE)
+shap.plot.dependence(shap_info, x = "tvoc_sd", color_feature = "WindSpeed",
+                     smooth = FALSE, add_hist = TRUE)
+
+# Hrm. I'm not sure what to make of these figures. I don't find the added histograms very useful.
+# The summary plot I think it probably pretty useful, but it gives something that's pretty similar to
+# a vip plot, just more complicated.
+shap.plot.summary(shap_info, dilute = 10)
+
+predict(xgb_fit2, new_data = baked_data_following_xgb2)
+wanted_metrics <- metric_set(rmse, rsq, mae)
+augment(xgb_fit2, new_data = baked_data_following_xgb2) |>
+  wanted_metrics(truth = benzene, estimate = .pred)
+# I guess that's the in-sample metrics, which are going to be way better than the out-of-sample
+# metrics. But still, that's pretty fun to see.
+plot_df = augment(xgb_fit2, new_data = baked_data_following_xgb2)
+ggplot(plot_df, aes(x = benzene, y = .pred)) +
+  geom_point() +
+  geom_abline(color = "red") +
+  geom_vline(xintercept = log(1)) +
+  geom_vline(xintercept = log(10))
+
+# Oh yes, this is on a log-log plot,
+# But this plot is suggesting that this model might actually be useful.
+
+# Ok, there are a couple more things that I want to work on, for the data-preprocessing.
+# 1. Don't normalize the variables
+# 2. Log transform tvoc_sd?
+# 3. Make DoW and hr numeric variables
+
+rec_spod_numeric = recipe(benzene ~ ., data = data_spod_training) |>
+  step_rename(t_ambient = `T(ambient)`,
+              p_barometric = `P(barometric)`,
+              t_ambient_day = `T(ambient)_day`,
+              p_barometric_day = `P(barometric)_day`) |>
+  update_role(end_time_lst, gc_id, gc_end_time, new_role = "ID") |>
+  update_role(deployment_id, deployment_name, pad_name, pad_lat, pad_lon,
+              camml_lat, camml_lon, tractfips, new_role = "ID") |>
+  step_log(benzene, offset = 0.1) |>
+  step_date(start_time_lst, features = c("dow"), ordinal = TRUE) |>
+  step_time(start_time_lst, features = "hour", keep_original_cols = FALSE) |>
+  step_mutate(wind_offset = abs(WindDirection - source_direction_degrees)) |>
+  step_rm(starts_with("WindDirection_"), starts_with("tvoc_"),
+          -tvoc_day, -tvoc_week, -tvoc_sd, -tvoc_high, -tvoc_low) |>
+  step_rm(flags) |> # This is more of an outcome than a predictor
+  step_rm(ends_with("_week")) |>
+  step_log(tvoc_sd, offset = 0.00001) |>
+  step_ordinalscore(start_time_lst_dow) |>
+  step_rm(operational_phase) |>
+  step_nzv(all_nominal_predictors())
+
+prep(rec_spod_numeric, data = data_spod_training) |>
+  bake(new_data = NULL, all_predictors(), all_outcomes()) |>
+  print(width = Inf)
+
+
+baked_data_for_numeric_xgb = prep(rec_spod_numeric, data = data_spod_training) |>
+  bake(new_data = NULL, all_predictors())
+
+# Check for infinities and NA's and NaNs
+baked_data_for_numeric_xgb |>
+  rowwise() |>
+  filter(if_any(.fns = \(x) !is.finite(x))) |>
+  print(width = Inf)
+
+# That seems reasonable. I think I like that set of features better.
+# Now I guess I should repeat the tuning/fitting/examining process.
+param_set_for_numeric_xgb =
+  xgb_tune2 |>
+  extract_parameter_set_dials() |>
+  finalize(x = baked_data_for_numeric_xgb)
+
+xgb_parameter_combos_numeric =
+  grid_latin_hypercube(
+    param_set, #I'm not really sure what black magic is going on here and how we're automatically coming up with the parameter ranges...
+    size = 70)
+
+
+xgb_tune_res_numeric = tune_grid(xgb_tune2, rec_spod_numeric,
+                                 resamples = folds_spod_training,
+                          grid = xgb_parameter_combos_numeric)
+
+
+collect_metrics(xgb_tune_res_numeric)
+show_best(xgb_tune_res4, "rmse")
+show_best(xgb_tune_res_numeric, "rmse")
+show_best(xgb_tune_res_numeric, "rsq")
+show_best(xgb_tune_res4, "rsq")
+# I like the 5thbest option the best - it has was seems to be more reasonable numbers for
+# min_n and learn_rate.
+
+wanted_params_numeric = show_best(xgb_tune_res_numeric, "rmse")[5, ]
+xgb_numeric_finalized = finalize_model(xgb_tune2,
+                                       wanted_params_numeric)
+# Now run on the full training dataset and collect predictions:
+baked_data_for_numeric_xgb_w_outcome = prep(rec_spod_numeric, data = data_spod_training) |>
+  bake(new_data = NULL, all_predictors(), all_outcomes())
+xgb_fit_numeric = fit(xgb_numeric_finalized, benzene ~ ., data = baked_data_for_numeric_xgb_w_outcome)
+vip(xgb_fit_numeric, geom = "point")
+
+xgb_eng = extract_fit_engine(xgb_fit_numeric)
+baked_data_for_shap_numeric = prep(rec_spod_numeric, data = data_spod_training) |>
+  bake(new_data = NULL,
+       all_predictors(),
+       composition = "matrix")
+# # have to do some manual adjustments to the column names
+# cn = colnames(baked_data_for_shap)
+# cn[grepl("[(]", cn)] = paste0("`", cn[grepl("[(]", cn)], "`")
+# colnames(baked_data_for_shap) = cn
+
+shap_info_numeric =
+  shap.prep(
+    xgb_model = extract_fit_engine(xgb_fit_numeric),
+    X_train = baked_data_for_shap_numeric
+  )
+
+shap.plot.summary(shap_info_numeric)
+shap.plot.dependence(shap_info_numeric, x = "tvoc_sd", smooth = FALSE, add_hist = TRUE)
+shap.plot.dependence(shap_info_numeric, x = "WindSpeed",
+                     smooth = FALSE, add_hist = TRUE)
+
+shap.plot.dependence(shap_info_numeric, x = "WindSpeed", color_feature = "tvoc_sd",
+                     smooth = FALSE, add_hist = TRUE)
+shap.plot.dependence(shap_info_numeric, x = "tvoc_sd", color_feature = "WindSpeed",
+                     smooth = FALSE, add_hist = TRUE)
+
+augment(xgb_fit_numeric, new_data = baked_data_for_numeric_xgb_w_outcome) |>
+  wanted_metrics(truth = benzene, estimate = .pred)
+plot_df = augment(xgb_fit_numeric, new_data = baked_data_for_numeric_xgb_w_outcome)
+ggplot(plot_df, aes(x = benzene, y = .pred)) +
+  geom_point() +
+  geom_abline(color = "red") +
+  geom_vline(xintercept = log(1)) +
+  geom_vline(xintercept = log(10))
+
+# Ok, this is getting to be where I want it to be.
+# I wonder what the best way to resume this later is?
+stopCluster(cl)
+saveRDS(list(xgb_numeric_finalized = xgb_numeric_finalized,
+             xgb_fit_numeric = xgb_fit_numeric,
+             rec_spod_numeric = rec_spod_numeric,
+             data_spod_training = data_spod_training,
+             data_spod_testing = data_spod_testing),
+        "xgboost_numeric_model_info.RDS")
