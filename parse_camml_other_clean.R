@@ -8,6 +8,8 @@ add_deployment_id = function(df) {
   avg_date = mean(df$start_time_lst, na.rm = TRUE)
   rows = which(avg_date >= camml_deployments_clean$ambient_sampling_start_date &
                  avg_date <= camml_deployments_clean$ambient_sampling_end_date)
+  print(rows)
+  browser()
   if (length(rows) > 1) {
     # Manual patching for 14 and 15
     if (identical(rows, c(14L, 15L))) {
@@ -30,7 +32,8 @@ add_deployment_id = function(df) {
 
 read_other = function(fn) {
 
-  df_wide = read_csv(fn, show_col_types = FALSE)
+  df_wide = read_csv(fn, show_col_types = FALSE) |>
+    mutate(file_name = fn)
   df_long = pivot_longer(df_wide, cols = c(-contains("Time_")),
                          names_to = c("measurement", "units"),
                          names_pattern = "^([^_]+)_\\[(.+)\\]$") |>

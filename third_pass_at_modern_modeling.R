@@ -173,7 +173,7 @@ data_spod_testing = data_testing |>
 folds_spod_training = group_vfold_cv(data_spod_training, group = deployment_id)
 
 
-### Building some very traditional models by hand to see how well we can do there:
+### Building some very traditional models by hand to see how well we can do there: ----
 ggplot(data_spod_training, aes(x = sqrt(WindSpeed), y = log10(benzene), color = tvoc)) +
   geom_point()
 
@@ -557,6 +557,18 @@ ggplot(plot_df, aes(x = benzene, y = .pred)) +
   geom_vline(xintercept = log(1)) +
   geom_vline(xintercept = log(10))
 
+tuned_metrics = fit_resamples(xgb_numeric_finalized, rec_spod_numeric, folds_spod_training) |>
+  collect_metrics()
+tuned_metrics |>
+  knitr::kable(digits = 3)
+
+tuned_predictions = fit_resamples(xgb_numeric_finalized, rec_spod_numeric, folds_spod_training,
+                                  control = control_resamples(save_pred = TRUE)) |>
+  augment()
+ggplot(tuned_predictions, aes(x = log(benzene + 0.1), y= .pred)) +
+  geom_point() +
+  geom_abline(color = "red")
+
 # Ok, this is getting to be where I want it to be.
 # I wonder what the best way to resume this later is?
 stopCluster(cl)
@@ -564,5 +576,34 @@ saveRDS(list(xgb_numeric_finalized = xgb_numeric_finalized,
              xgb_fit_numeric = xgb_fit_numeric,
              rec_spod_numeric = rec_spod_numeric,
              data_spod_training = data_spod_training,
-             data_spod_testing = data_spod_testing),
+             data_spod_testing = data_spod_testing,
+             folds_spod_training = folds_spod_training),
         "xgboost_numeric_model_info.RDS")
+
+### Point of comparison: lm + splines ----
+rec_spod_spline = rec_spod_numeric |>
+  step_ns(tvoc_sd, WindSpeed, deg_free = 6)
+
+lm_fit_spline =
+  fit_resamples(lm_mod, rec_spod_spline, resamples = folds_spod_training,
+                control = control_resamples(save_pred = TRUE))
+lm_fit_spline |>
+  collect_metrics() |>
+  knitr::kable(digits = 2)
+# I"m getting an rmse of 0.529 and an r2 of 0.359 - against, that's better than I was expecting
+# for out-of-sample error, and a lot better than we were getting without the splines.
+
+predictions = lm_fit_spline |>
+  collect_predictions(summarize = TRUE)
+
+plot_df = augment(lm_fit_spline)
+ggplot(plot_df, aes(x = tvoc_sd, y = .pred)) +
+  geom_point() +
+  scale_x_log10()
+
+ggplot(plot_df, aes(x = WindSpeed, y = .pred)) +
+  geom_point()
+
+ggplot(plot_df, aes(x = log(benzene + 0.1), y= .pred)) +
+  geom_point()  +
+  geom_abline(color = "red")
