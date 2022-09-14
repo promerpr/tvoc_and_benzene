@@ -47,3 +47,8 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Large data files
+parsed_data/camml/camml_other_data_long.csv
+parsed_data/camml/camml_other_data_wide.csv
+parsed_data/camml/camml_other_data_wide_gcid.csv
