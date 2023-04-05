@@ -1,0 +1,8 @@
+PID_data_bella.csv: downloaded from https://cohealthviz.dphe.state.co.us/t/EnvironmentalEpidemiologyPublic/views/Bella_datadash_beta_english/DataDetails?%3Adisplay_count=n&%3Aembed=y&%3AisGuestRedirectFromVizportal=y&%3Aorigin=viz_share_link&%3AshowAppBanner=false&%3AshowVizHome=n
+
+Knight_PIDdata.csv: downloaded from https://cohealthviz.dphe.state.co.us/t/EnvironmentalEpidemiologyPublic/views/Knight/DataDetails?%3AshowAppBanner=false&%3Adisplay_count=n&%3AshowVizHome=n&%3Aorigin=viz_share_link&%3AisGuestRedirectFromVizportal=y&%3Aembed=y
+
+Ivey_PIDdata_20210310.csv: downloaded from https://cohealthviz.dphe.state.co.us/t/EnvironmentalEpidemiologyPublic/views/Ivey/DataDetails?%3AshowAppBanner=false&%3Adisplay_count=n&%3AshowVizHome=n&%3Aorigin=viz_share_link&%3AisGuestRedirectFromVizportal=y&%3Aembed=y
+
+
+tVOC field monitoring form (Responses).csv: downloaded from the Google Drive Folder X:\Shared drives\CDPHE OGHIR\Total VOCs Monitoring

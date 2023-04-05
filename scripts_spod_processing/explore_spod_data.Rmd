@@ -1,0 +1,642 @@
+---
+title: "Exploring the SPOD data"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(here)
+library(lubridate)
+library(janitor)
+source(here("scripts_spod_processing", "useful_spod_functions.R"))
+```
+
+Our goal here is to understand when we have co-locations of the SPOD and CAMML data. The problem is that just getting a list of all the places that SPODs have been is really messy! 
+
+So that's going to be our first task: figuring out where all the SPODs have been over time. 
+
+## Figuring out SPOD locations
+
+Here I think we can start by making a data hierarchy? 
+
+1. Processed data in Total VOCs Monitoring
+1. tVOC field monitoring form
+1. My archived set of data for the monitoring (not sure how much of that exists?)
+1. Locations on the AirSense platform (not sure if I have access or not?)
+
+### Total VOCs Monitoring Folder
+
+This is the shared Google Drive folder X:/Shared drives/CDPHE OGHIR/Total VOCs Monitoring/SPOD Data
+
+I see 7 sub-folders there, which I would like to process. I should have code somewhere to read in SPOD data
+
+```{r, cache=TRUE}
+combined_f = function(fn) {
+  if (endsWith(fn, "txt")) {
+    df = read_tsv(fn, col_names = FALSE, guess_max = 1e7)
+  } else {
+    df = read_csv(fn, col_names = FALSE, guess_max = 1e7)
+    if (ncol(df) == 1) {
+      df = read_tsv(fn, col_names = FALSE, guess_max = 1e7)
+    }
+  }
+  df = df |>
+    fix_spod_colnames() |>
+    clean_up_raw_spod() |>
+    downsample_spod()
+}
+# My attempt at automatic caching didn't work, so I'm doing it manually
+save_fn = here("data_spod", "petro_bef_data.RDS")
+if (file.exists(save_fn)) {
+  petro_bef_data = readRDS(save_fn)
+} else {
+  petro_bef_files = 
+    list.files("X:/Shared drives/CDPHE OGHIR/Total VOCs Monitoring/SPOD Data/1160 - Petro BEF Pad - @ Park/",
+             pattern = "^[0-9]+[.]TXT$",
+             full.names = TRUE)
+  
+  petro_bef_data = map_dfr(petro_bef_files, combined_f)
+  saveRDS(petro_bef_data, save_fn)
+}
+
+```
+
+```{r, cache=TRUE}
+save_fn = here("data_spod", "ivey_data.RDS")
+if (file.exists(save_fn)) {
+  ivey_data = readRDS(save_fn)
+} else {
+  ivey_files = 
+    list.files("X:/Shared drives/CDPHE OGHIR/Total VOCs Monitoring/SPOD Data/1035 - IVEY PAD - ANDERSON RES/",
+               pattern = "^[0-9]+[.](TXT|txt)$",
+               full.names = TRUE)
+  
+  ivey_data = map_dfr(ivey_files[c(-17, -28, -47)], combined_f)
+  # saveRDS(ivey_data, save_fn)
+}
+```
+
+```{r, cache=TRUE}
+save_fn = here("data_spod", "dcp_data.RDS")
+if (file.exists(save_fn)) {
+  dcp_data = readRDS(save_fn)
+} else {
+  
+  dcp_files = list.files("X:/Shared drives/CDPHE OGHIR/Total VOCs Monitoring/SPOD Data/1035 - DCP Midstream/Rissler Raw Data/",
+                         pattern = "^[0-9]+[.](TXT|txt)$",
+                         full.names = TRUE)
+  dcp_data = map_dfr(dcp_files, combined_f)
+  saveRDS(dcp_data, save_fn)
+}
+```
+
+```{r, cache=TRUE}
+save_fn = here("data_spod", "camml_data.RDS")
+if (file.exists(save_fn)) {
+  camml_data = readRDS(save_fn)
+} else {
+  camml_files = list.files("X:/Shared drives/CDPHE OGHIR/Total VOCs Monitoring/SPOD Data/1033 - CAMML/",
+                           pattern = "^[0-9]+[.](TXT|txt)$",
+                           full.names = TRUE)
+  camml_data = map_dfr(camml_files, combined_f)
+  saveRDS(camml_data, save_fn)
+}
+```
+
+```{r, cache=TRUE}
+save_fn = here("data_spod", "sacwsd_data.RDS")
+if (file.exists(save_fn)) {
+  sacwsd_data = readRDS(save_fn)
+} else {
+  sacwsd_files = list.files("X:/Shared drives/CDPHE OGHIR/Total VOCs Monitoring/SPOD Data/1032 - SACWSD WATER TOWER/",
+                            pattern = "^[0-9]+[.](TXT|txt)$",
+                            full.names = TRUE)
+  sacwsd_data = map_dfr(sacwsd_files, combined_f)
+  saveRDS(sacwsd_data, save_fn)
+}
+```
+
+```{r, cahce=TRUE}
+save_fn = here("data_spod", "bella_data.RDS")
+if (file.exists(save_fn)) {
+  bella_data = readRDS(save_fn)
+} else {
+  bella_files = list.files("X:/Shared drives/CDPHE OGHIR/Total VOCs Monitoring/SPOD Data/1001 - BELLA/",
+                           pattern = "^[0-9]+[.](TXT|txt)$",
+                           full.names = TRUE)
+  bella_data = map_dfr(bella_files, combined_f)
+  saveRDS(bella_data, save_fn)
+}
+```
+
+Ok, I have read in that data. I'm not sure what it means though. Push forward! Always push forward! 
+
+I think what I will eventually want is a data frame with columns SPOD_ID, Start date, end date, Lat, Lon, Location Name. 
+
+So my plan is to round to four digits and summarize. After testing, I'm revising the plan to rounding to 3 digits and summarizing. 
+
+```{r}
+plot_df = bind_rows(ivey_data, dcp_data, camml_data, sacwsd_data, bella_data) |>
+  mutate(LAT = round(LAT, 3),
+         LON = round(LON, 3)) |>
+  arrange(SPOD_ID, DATE) |>
+  group_by(SPOD_ID, LAT, LON) |>
+  summarize(start_date = min(DATE), # Actually, this breaks if we go a-b-a
+            end_date = max(DATE),
+            .groups = "drop") |>
+  arrange(SPOD_ID, start_date) |>
+  mutate(location = paste(LAT, LON, sep = "-"))
+ggplot(plot_df) + 
+  geom_linerange(aes(y = location, xmin = start_date, xmax = end_date)) +
+  geom_point(aes(y = location, x = start_date + (end_date - start_date)/2, group = location)) + 
+  facet_wrap("SPOD_ID", ncol = 1, scales = "free_y") 
+```
+
+
+### tVOC field monitoring form
+
+I downloaded the form responses as a csv. There's a lot of information here, 
+but what I want for right now is just to figure out the locations:
+
+```{r}
+spod_form_df = read_csv(here("data_spod", "tVOC Field Monitoring Events Report Form Responses - Form Responses 1.csv")) |>
+  clean_names()
+
+spod_form_df |>
+  count(what_is_the_event, sort = TRUE) |>
+  print(n = Inf)
+```
+
+I'll remove columns that aren't relevant to us yet:
+
+```{r}
+spod_form_locations = spod_form_df |>
+  transmute(spod_name = x2,
+         location_name = industry_location_name,
+         event_type = what_is_the_event, 
+         start_date = what_is_the_start_date_for_this_event_mst,
+         start_time = what_is_the_start_time_for_this_event_mst,
+         stop_date = if_applicable_what_is_the_stop_date_mst_include_for_calibrations_and_remove_data_events,
+         stop_time = if_applicable_what_is_the_stop_time_mst_include_for_calibrations_and_remove_data_events,
+         cannister_setup = is_this_setup_for_a_canister_or_tube_trigger == "Yes",
+         location_coord = site_location)
+  
+```
+
+Now I need to munge the dates and times and then pivot_wider. 
+Ok, this is actually super messy. First I need to make sure I have the right event names. Hrm, 
+even that's a little more complicated, because sometimes a move is a stop-start and sometimes 
+it's just a start. Ok, I think on retrospect, we can say that the "moves" are all unimportant for 
+type of analysis we're working on - well, maybe not, maybe we'll want the exact location for things
+like wind direction and the like. But for now, let's ignore it. 
+
+```{r}
+spod_form_locations |>
+  count(event_type) |>
+  print(n = Inf, width = Inf)
+  
+
+# mutate(event_type = case_when(event_type == "Monitoring begins (for this device)" ~ "start_date",
+                                # event_type == "End of monitoring (for this device)" ~ "end_date",
+                                # event_type == "This unit was moved from the rooftop of the CAMML to ground level as the CAMML was leaving the site." ~ "end_date",
+                                # TRUE ~ NA_character_)
+```
+
+
+First I need to standardize location names and event names:
+
+```{r}
+location_name_lookup = 
+  tribble(~location_name, ~corrected_name,
+          "Cub Creek -Knight Pad", "Cub Creek - Knight Pad",
+          "CAMML Lone Tree Pad", "CAMML - Lone Tree Pad",
+          "CAMML- Lone Tree Pad", "CAMML - Lone Tree Pad",
+          "Ivey - CAMML", "Ivey Pad - CAMML",
+          "Papa Jo/Yellohammer/Mae J", "Papa Jo/Yellowhammer/Mae J pad",
+          "Papa Jo/Yellowhammer/Mae J", "Papa Jo/Yellowhammer/Mae J pad",
+          "South Ute Indian Reservation Facility", "Southern Ute Indian Reservation Facility",
+          )
+
+spod_form_locations = spod_form_locations |>
+  left_join(location_name_lookup, by = "location_name") |>
+  mutate(location_name = coalesce(corrected_name, location_name)) |>
+  select(-corrected_name)
+
+
+
+spod_form_locations |>
+  count(location_name) |>
+  print(n = Inf)
+```
+
+Then we need to make sure 
+
+```{r}
+spod_form_locations_clean = 
+  spod_form_locations |>
+  mutate(event_time = as.POSIXct(paste(mdy(start_date), start_time),
+                            format = "%Y-%m-%d %H:%M:%S"),
+         .keep = "unused") |>
+  mutate(event_type = case_when(event_type == "Monitoring begins (for this device)" ~ "start_date",
+                                event_type == "End of monitoring (for this device)" ~ "end_date",
+                                event_type == "This unit was moved from the rooftop of the CAMML to ground level as the CAMML was leaving the site." ~ "end_date",
+                                event_type == "Moved Instrument to open space, end of monitoring at Lehmann's Residence" ~ "end_date",
+                                TRUE ~ NA_character_),
+  ) |>
+  select(-cannister_setup, -stop_date, -stop_time, -location_coord) |>
+  filter(!is.na(event_type)) |>
+  arrange(spod_name, location_name, event_time) |>
+  group_by(spod_name, location_name) |>
+  mutate(cum_starts = cumsum(event_type == "start_date"))
+  
+spod_form_locations_wide = 
+  spod_form_locations_clean |>
+  pivot_wider(names_from = event_type, values_from = event_time)
+```
+
+```{r}
+
+spod_form_locations_wide |>
+  filter(str_detect(spod_name, "SPOD")) |>
+  ungroup() |>
+  mutate(date = coalesce(start_date, end_date),
+         location_name = fct_reorder(location_name, date, min, .desc = TRUE, na.rm = TRUE)) |>
+ggplot(aes(y = location_name, color = spod_name)) + 
+  geom_linerange(aes(xmin = start_date, xmax = coalesce(end_date, today())), position = position_dodge2(width = 0.4)) +
+  geom_point(aes(x = start_date), shape = 16, size = 2.5, position = position_dodge2(width = 0.4)) +
+  geom_point(aes(x = end_date), shape = 18, size = 3, position = position_dodge2(width = 0.4)) +
+  scale_color_brewer(palette = "Paired")
+```
+
+Well, that's something. I like that as an overview graphic. There's definitely some more cleaning 
+that needs to happen, but I don't think I can do a lot more. 
+
+There's a second graphic I want, which is split out by individual SPOD:
+
+```{r}
+spod_form_locations_wide |>
+  filter(str_detect(spod_name, "SPOD")) |>
+  ungroup() |>
+  mutate(location_name = fct_reorder(location_name, start_date, min, .desc = TRUE, na.rm = TRUE)) |>
+ggplot(aes(y = location_name, color = spod_name)) + 
+  geom_linerange(aes(xmin = start_date, xmax = coalesce(end_date, today())), position = position_dodge2(width = 0.4)) +
+  geom_point(aes(x = start_date), shape = 16, size = 2.5, position = position_dodge2(width = 0.4)) +
+  geom_point(aes(x = end_date), shape = 18, size = 3, position = position_dodge2(width = 0.4)) +
+  scale_color_brewer(palette = "Paired") +
+  facet_wrap("spod_name", scales = "free")
+```
+
+Ok, that's that then! I think I should circulate this stuff with Alicia and Heather once I've 
+gotten a little further (checking my archived data and AirSense). 
+
+So, what archived data do I have? 
+
+```{r}
+files_set1 = list.files("~/r-analysis/spod.surveillance/data/api", full.names = TRUE)
+read_api_folder_data = function(fn) {
+  read_csv(fn, col_types = cols(
+  DATE.TIME = col_datetime(format = ""),
+  PPB_calc = col_double(),
+  mV.raw = col_double(),
+  Temp.C = col_double(),
+  Humid.. = col_double(),
+  Pressure.mbar = col_double(),
+  wind.speed = col_double(),
+  wind.direction = col_double(),
+  sensor.temp = col_double(),
+  heat.output = col_double(),
+  setpoint = col_double(),
+  battery.voltage = col_double(),
+  charge.current = col_double(),
+  run.current = col_double(),
+  can.value = col_double(),
+  trigger.flag = col_double(),
+  active.flag = col_double(),
+  event.flag = col_double(),
+  latitude = col_double(),
+  longitude = col_double(),
+  Date_ID = col_double(),
+  spod_label = col_character()
+))
+}
+data_set1 = map_dfr(files_set1, read_api_folder_data)
+```
+
+```{r}
+locations_set1 = data_set1 |>
+  clean_names() |>
+  select(date_time, spod_label, latitude, longitude)
+locations_set1 |>
+  filter(latitude > 0) |>
+  ggplot(aes(x = date_time, y = latitude, color = spod_label)) + 
+  geom_line()
+```
+
+Using the same approach as I did for the data in the google drive:
+```{r}
+plot_df = locations_set1 |>
+  filter(latitude > 0) |>
+  mutate(latitude = round(latitude, 3),
+         longitude = round(longitude, 3)) |>
+  arrange(spod_label, date_time) |>
+  group_by(spod_label, latitude, longitude) |>
+  summarize(start_date = min(date_time), # Actually, this breaks if we go a-b-a
+            end_date = max(date_time),
+            .groups = "drop") |>
+  arrange(spod_label, start_date) |>
+  mutate(location = paste(latitude, longitude, sep = "-"))
+ggplot(plot_df) + 
+  geom_linerange(aes(y = location, xmin = start_date, xmax = end_date)) +
+  geom_point(aes(y = location, x = start_date + (end_date - start_date)/2, group = location)) + 
+  facet_wrap("spod_label", ncol = 1, scales = "free_y") 
+```
+
+That's not actually that interesting - looks like I have data for three SPODs for one location each
+Is what I actually want to plot all of these on a map (irrespective of date?) Maybe that's for later
+
+
+```{r}
+files_set2 = readRDS("~/r-analysis/spod.surveillance/data/sensitconnect/file_info_table.RDS") |> 
+  filter(no_points >= 100) |>
+  pull(filename) %>%
+  file.path("~/r-analysis/spod.surveillance", .)
+
+list.files("~/r-analysis/spod.surveillance/data/sensitconnect/", full.names = TRUE,
+                        pa)
+read_sensitconnect_folder_data = function(fn) {
+  read_csv(fn, col_types = cols(
+  `_id` = col_character(),
+  id = col_character(),
+  date = col_datetime(format = ""),
+  pid1_PPB_Calc = col_double(),
+  pid1_mvRaw = col_double(),
+  temp = col_double(),
+  rh_Humd = col_double(),
+  pressure_mbar = col_double(),
+  ws_speed = col_double(),
+  ws_direction = col_double(),
+  tc_temp = col_double(),
+  tc_heatOutput = col_double(),
+  tc_setPoint = col_double(),
+  batt_voltage = col_double(),
+  chrg_current = col_double(),
+  run_current = col_double(),
+  lat = col_double(),
+  long = col_double(),
+)) |>
+    select(id, `_id`, date, lat, long)
+}
+
+data_set2 = map_dfr(files_set2, read_sensitconnect_folder_data)
+```
+
+```{r}
+locations_set2 = data_set2 |>
+  clean_names() |>
+  select(date_time = date, spod_label = id, latitude = lat, longitude = long)
+locations_set2 |>
+  filter(latitude > 0) |>
+  ggplot(aes(x = date_time, y = latitude, color = spod_label)) + 
+  geom_line()
+```
+
+```{r}
+plot_df = locations_set2 |>
+  filter(latitude > 0) |>
+  mutate(latitude = round(latitude, 3),
+         longitude = round(longitude, 3)) |>
+  arrange(spod_label, date_time) |>
+  group_by(spod_label, latitude, longitude) |>
+  summarize(start_date = min(date_time), # Actually, this breaks if we go a-b-a
+            end_date = max(date_time),
+            .groups = "drop") |>
+  arrange(spod_label, start_date) |>
+  mutate(location = paste(latitude, longitude, sep = "-"))
+ggplot(plot_df) + 
+  geom_linerange(aes(y = location, xmin = start_date, xmax = end_date)) +
+  geom_point(aes(y = location, x = start_date + (end_date - start_date)/2, group = location)) + 
+  facet_wrap("spod_label", ncol = 1, scales = "free_y") 
+```
+
+```{r}
+library(tmap)
+library(sf)
+plot_sf = plot_df |>
+  st_as_sf(coords = c("longitude", "latitude"), crs = "+proj=longlat")
+tmap_mode("view")
+tm_shape(plot_sf) +
+  tm_dots(col = "spod_label")
+```
+
+## AirSense data
+
+```{r}
+airsense_lat_raw = read_csv(here::here("data_airsense_location/latitude_info.csv"),
+                            col_types = cols(DateTime = "T", .default = "d"))
+airsense_lat = airsense_lat_raw |>
+  pivot_longer(cols = -DateTime, names_to = c("col_type", "spod_id"), values_to = "latitude",
+               names_pattern = "^([^(]+)[(]([0-9]+)") |>
+  filter(latitude >= 35 | is.na(latitude))
+ggplot(airsense_lat, aes(x = DateTime, y= latitude, color = col_type)) + 
+  geom_line(linestyle = "dashed") +
+  facet_wrap("spod_id", scales = "free")
+
+airsense_lat |>
+  filter(!is.na(latitude)) |>
+  count(spod_id, col_type)
+```
+Doesn't look like we really have to worry about LATITUDE v. lat - it only affects 1034, and that
+only has 20 data points
+
+```{r}
+airsense_lon_raw = read_csv(here::here("data_airsense_location/longitude-info.csv"),
+                            col_types = cols(DateTime = "T", .default = "d"))
+airsense_lon = airsense_lon_raw |>
+  pivot_longer(cols = -DateTime, names_to = c("col_type", "spod_id"), values_to = "longitude",
+               names_pattern = "^([^(]+)[(]([0-9]+)") |>
+  filter(longitude < -101 | is.na(longitude))
+
+ggplot(airsense_lon, aes(x = DateTime, y= longitude, color = col_type)) + 
+  geom_line(linetype = "solid") +
+  facet_wrap("spod_id", scales = "free")
+
+airsense_lon |>
+  filter(!is.na(longitude)) |>
+  count(spod_id, col_type)
+```
+
+```{r}
+df1 = filter(airsense_lon, spod_id != "1034", !is.na(longitude))
+df2 = filter(airsense_lat, spod_id != "1034", !is.na(latitude))
+airsense_loc = full_join(df1, df2,
+                         by = c("spod_id", "DateTime"))
+```
+
+My plan to find overlap periods is to look at each CAMML deployment individually. For each one,
+1. Filter my list of locations from various sources to the dates listed 
+2. Plot on a map
+3. Look for co-locations
+
+```{r}
+camml_deployments_raw = read_csv("data_camml/CAMML Deployment CSV - April2023.csv") |>
+  clean_names()
+camml_deployments = camml_deployments_raw |>
+  mutate(ambient_sampling_start_date = parse_datetime(ambient_sampling_start_date, format = "%m/%d/%Y %H:%M:%S"),
+         ambient_sampling_end_date = parse_datetime(ambient_sampling_end_date, format = "%m/%d/%Y %H:%M:%S")) |>
+  select(year:pad_name_sampling_log, camml_lat, camml_lon, ambient_sampling_start_date, ambient_sampling_end_date)
+```
+
+Ok, I need to pull all my different locations together. Should I maybe compare first? 
+Well, ok, this is actually more complicated than I have. I have names from the SPOD forms, but not 
+lat/lon. 
+So I guess we should do this 2 ways: one with lat/lon for the AirSense data, and one with names for
+the SPOD form data. 
+
+```{r}
+range(spod_form_locations_wide$start_date, na.rm = TRUE) # The first SPOD data we have is from 2020
+camml_deployments |>
+  filter(year >= 2020)
+# I see overlaps at:
+# Great Western - Ivey
+# Cub Crek - Knight
+# CC-ND Eagle Point
+# Civitas - LoneTree
+```
+
+```{r}
+airsense_loc_r = airsense_loc |> 
+  mutate(latitude = round(latitude, 3),
+         longitude = round(longitude, 3)) |>
+  filter(!is.na(latitude), !is.na(longitude)) |>
+  select(-col_type.x, -col_type.y) |>
+  st_as_sf(coords = c("longitude", "latitude"), crs = "+proj=lonlat", remove = FALSE)
+range(airsense_loc_r$DateTime, na.rm = TRUE)
+# The earliest data we have from AirSense is 2022
+camml_deployments |>
+  filter(year >= 2022)
+# Only 3 deployments we need to look at/
+camml_sf = camml_deployments |>
+  filter(year >= 2022) |>
+  st_as_sf(coords = c("camml_lon", "camml_lat"), crs = "+proj=lonlat") |>
+  mutate(name = paste(company_name, "-", pad_name_sampling_log),
+         .before = year)
+
+camml_sf
+```
+
+First deployment: Cub Creek - Knight
+```{r}
+set1 = airsense_loc_r |>
+  filter(DateTime >= camml_sf$ambient_sampling_start_date[[1]],
+         DateTime <= camml_sf$ambient_sampling_end_date[[1]]) |>
+  count(spod_id, geometry)
+tm_shape(camml_sf[1, ]) + 
+  tm_dots(size = 0.2, col = "purple") +
+  tm_shape(set1) + 
+  tm_dots(col = "spod_id")
+```
+
+I'm seeing an overlap with 1158 and 1032 - so that's nice
+
+Second deployment: Civitas - LoneTree
+```{r}
+set2 = airsense_loc_r |>
+  filter(DateTime >= camml_sf$ambient_sampling_start_date[[2]],
+         DateTime <= camml_sf$ambient_sampling_end_date[[2]]) |>
+  count(spod_id, geometry)
+tm_shape(camml_sf[2, ]) + 
+  tm_dots(size = 0.2, col = "purple") +
+  tm_shape(set2) + 
+  tm_dots(col = "spod_id")
+```
+I'm seeing an overlap with 1157
+
+Third Deployment: Lorraine Granado
+
+```{r}
+set3 = airsense_loc_r |>
+  filter(DateTime >= camml_sf$ambient_sampling_start_date[[3]]) |>
+  count(spod_id, geometry)
+tm_shape(camml_sf[3, ]) + 
+  tm_dots(size = 0.2, col = "purple") +
+  tm_shape(set3) + 
+  tm_dots(col = "spod_id")
+```
+
+Overlap with 1157
+
+Question: Was there an SPOD at Livingston?
+
+```{r}
+
+livingston_sf = camml_deployments |>
+  filter(pad_name_sampling_log == "Livingston") |>
+  st_as_sf(coords = c("camml_lon", "camml_lat"), crs = "+proj=lonlat") |>
+  mutate(name = paste(company_name, "-", pad_name_sampling_log),
+         .before = year)
+
+uloc1 = locations_set1 |>
+  mutate(latitude = round(latitude, 3),
+         longitude = round(longitude, 3)) |>
+  distinct(spod_label, latitude, longitude) |>
+  st_as_sf(coords = c("longitude", "latitude"), crs = "+proj=longlat")
+tm_shape(livingston_sf) + 
+  tm_dots(size = 0.2, col = "purple") +
+  tm_shape(uloc1) + 
+  tm_dots(col = "spod_label")
+```
+
+In locations_set1, there was one SPOD about 6 km away - that's very far on the scale we're talking about
+
+```{r}
+uloc2 = locations_set2 |>
+  mutate(latitude = round(latitude, 3),
+         longitude = round(longitude, 3)) |>
+  distinct(spod_label, latitude, longitude) |>
+  st_as_sf(coords = c("longitude", "latitude"), crs = "+proj=longlat")
+tm_shape(livingston_sf) + 
+  tm_dots(size = 0.2, col = "purple") +
+  tm_shape(uloc2) + 
+  tm_dots(col = "spod_label")
+```
+
+Nothing in locations_set2. So I think we can safely say that we don't have any overlapping measurements there. 
+
+So there are 5 overlapping deployments: 
+1. Great Western - Ivey
+2. Cub Creek - Knight
+3. Eagle Pointe
+4. Civitas - LoneTree
+5. Vetting Pad - Bella Romero
+
+So my next job is to track down the data for these 5. 
+
+```{r}
+locations_set2 |>
+  filter(spod_label == "1033",
+         date_time >= mdy_hms("5/14/2021 22:57:00"),
+         date_time <= mdy_hms("7/17/2021 17:46:13")) |>
+  group_by(spod_label, latitude, longitude) |>
+  summarize(start_time = min(date_time),
+            end_time = max(date_time)) |>
+  knitr::kable(digits = 4)
+```
+
+Alright! That's the data from Eagle Pointe, from 6/14 - 7/17 - that's about half of the deployment.
+I'm not sure what to make of the data from 5/18 - 6/14, if that's real or not. 
+
+```{r}
+locations_set2 |>
+  filter(spod_label == "1001",
+         date_time >= mdy_hms("4/14/2021 22:57:00"),
+         date_time <= mdy_hms("7/17/2021 17:46:13")) |>
+  group_by(spod_label, latitude, longitude) |>
+  summarize(start_time = min(date_time),
+            end_time = max(date_time)) |>
+  arrange(start_time) |>
+  knitr::kable(digits = 4)
+```
+
+Looks like 1001 wasn't co-located with the CAMML. 

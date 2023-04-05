@@ -1,0 +1,29 @@
+Year,Company Name,Pad Name           (Sampling Log),PAD_LAT,PAD_LON,CAMML_LAT,CAMML_LON,Distance to Source (ft),Source Direction (degrees),Ambient Sampling Start Date,Ambient Sampling End Date,Operational Phase
+2017,Crestone,Woolley Sosa,,,40.06,-105.06,,,3/7/2017 13:05:00,3/23/2017 7:59:00,Drilling
+2017,Crestone,Waste Connections,40.02,-105.03,40.01,-105.03,"1,842",14,6/8/2017 12:06:00,6/14/2017 8:20:00,Drilling
+2017,Crestone,Pratt,40.02,-105.02,40.01,-105.02,"1,146",34,7/27/2017 16:16:00,8/14/2017 8:08:00,Drilling
+2017,Crestone,Pratt,40.02,-105.02,40.01,-105.02,"1,147",34,10/13/2017 12:10:00,10/26/2017 8:46:00,Hydraulic Fracturing
+2017,Crestone,Pratt,40.02,-105.02,40.01,-105.02,"1,146",34,10/26/2017 14:29:00,11/16/2017 9:10:00,FlowBack
+2018,N/A,Platteville,,,40.18,-104.73,,,5/16/2018 9:20:00,5/23/2018 8:06:00,Weld County Regional
+2018,N/A,Platteville,,,40.18,-104.73,,,8/27/2018 13:07:00,9/3/2018 12:48:00,Weld County Regional
+2018,Great Western,Dittmer,40.01,-104.80,40.01,-104.80,"1,518",255,9/4/2018 15:19:00,9/7/2018 10:02:00,Drilling
+2018,Extraction,Livingston,39.98,-105.04,39.98,-105.04,#REF!,#REF!,10/31/2018 13:13:00,11/16/2018 9:04:00,Baseline (Fall)
+2018,Extraction,Rinn Valley,40.13,-105.04,40.13,-105.06,"4,310",86,12/20/2018 13:02:00,1/10/2019 9:16:00,Flowback
+2019,Extraction,Vetting,40.40,-104.66,40.41,-104.66,"1,585",197,5/6/2019 10:49:00,5/26/2019 20:52:00,Baseline
+2019,Extraction,Vetting,40.40,-104.66,40.41,-104.66,"1,590",197,5/26/2019 21:54:00,6/3/2019 7:34:00,Hydraulic Fracturing
+2019,Extraction,Livingston,39.98,-105.04,39.98,-105.04,670,103,6/4/2019 13:59:00,7/5/2019 12:08:00,Baseline (Summer)
+2019,Extraction,Livingston,39.98,-105.04,39.98,-105.04,674,104,7/8/2019 11:40:00,9/13/2019 8:53:00,Drilling
+2019,Extraction,Vetting,40.40,-104.66,40.41,-104.66,"1,589",196,7/29/2019 14:57:00,8/27/2019 7:36:00,Mill Out
+2019,Extraction,Vetting,40.40,-104.66,40.41,-104.66,"1,589",196,10/16/2019 7:32:00,11/12/2019 19:31:00,Flowback/Production
+2019,Extraction,Vetting,40.40,-104.66,40.41,-104.66,"1,589",197,12/4/2019 14:46:00,12/20/2019 8:11:00,Flowback/Production
+2020,Extraction,Livingston,39.98,-105.04,39.98,-105.04,675,104,1/29/2020 16:55:00,2/19/2020 8:12:00,Hydraulic Fracturing
+2020,Extraction,Livingston,39.98,-105.04,39.98,-105.04,675,104,2/27/2020 17:31:00,4/2/2020 10:32:00,Mill Out
+2020,Extraction,Livingston,39.98,-105.04,39.98,-105.04,678,105,4/3/2020 15:56:00,6/1/2020 5:50:00,Flowback/Production
+2020,Extraction,Vetting,40.40,-104.66,40.41,-104.66,"1,589",197,8/12/2020 4:03:00,10/9/2020 5:31:00,Production
+2021,Great Western,Ivey,39.97,-104.97,39.97,-104.97,"1,035",50,2/3/2021 11:36:00,2/26/2021 5:12:00,Drilling
+2021,Cub Creek,Knight,40.20,-105.04,40.20,-105.04,556,76,2/26/2021 22:45:00,3/12/2021 6:35:00,Drilling
+2021,CC-ND,Eagle Pointe (Suncor),39.80,-104.94,39.81,-104.93,"5,076",254,5/14/2021 22:57:00,7/17/2021 17:46:13,N/A
+2021,CubCreek,Knight,40.20,-105.04,40.20,-105.04,544,78,12/7/2021 13:30:00,12/13/2021 4:53:00,Flowback/Production
+2022,CubCreek,Knight,40.20,-105.04,40.20,-105.04,534,79,5/3/2022 13:27:00,8/8/2022 8:00:00,Production
+2022,Civitas,LoneTree,39.71,-104.64,39.71,-104.64,"1,138",208,10/7/2022 23:00:00,12/21/2022 10:00:00,Drilling
+2023,CC-ND,Lorraine Granado (Suncor),39.80,-104.94,39.79,-104.95,"4,483",16,1/11/2023 1:00:00,,Baseline/Production
