@@ -129,3 +129,20 @@ f_full = function() {
     mutate(tvoc_min_7day = slide_dbl(tvoc, swmin, .before = 24*60*7, .complete = FALSE, na.rm = TRUE))
 }
 bench::mark(f_full())
+
+
+# See how much slower slide_index is compared to slide regular.
+
+test_df = data.frame(x = rnorm(1e4),
+                     i = seq(ymd_hm("2022-01-01 0:0"), ymd_hm("2022-12-31 0:0"), length.out = 1e4))
+test_df
+# 7 days = 1e4/365*7 = 191 data points
+f_reg = function(df) {
+  mutate(df,
+         x_min_7day = slide_dbl(x, swmin, .before = 191, .complete = FALSE))
+}
+f_ind = function(df) {
+  mutate(df,
+         x_min_7day = slide_index_dbl(x, i, swmin, .before = days(7), .complete = FALSE))
+}
+bench::mark(f_reg(test_df), f_ind(test_df), check = FALSE)

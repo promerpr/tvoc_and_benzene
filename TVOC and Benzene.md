@@ -35,3 +35,16 @@ When we look at a linear model with splines for tvoc and WindSpeed, I get the fo
 | rsq     | standard   | 0.36 |    7 |    0.09 | Preprocessor1_Model1 |
 
 So while that's not as good as the xgboost model, it's definitely respectable. The R2 especially is very similar to the xgboost model; the RMSE is notably higher. I wonder if the spline model might actually be better for production, given that it's more understandable. 
+
+## Looking more at what TVOCs actually measure
+
+What information about PID measurements do I need before I feel confident in this step? Slash to do some of the other comparisons that we might want to do?
+
+1. Performance characteristics against different gases - I haven't found too much that seems useful, other than that one spec sheet. Ok, I've found a couple different spec sheets. 
+
+
+
+
+
+## Maybe hours of benzene over 1 ppb? 
+

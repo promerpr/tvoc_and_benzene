@@ -2,20 +2,13 @@ library(tidyverse)
 library(rsample)
 library(lubridate)
 
-camml_voc = read_csv("parsed_data/camml/camml_voc_data_gcid.csv")
-camml_other = read_csv("parsed_data/camml/camml_other_data_gcid.csv")
+camml_voc = read_csv("parsed_data/camml/camml_voc_data.csv")
+camml_other_wide = read_csv("parsed_data/camml/camml_other_data_wide.csv")
 
-camml_other_units_fixed = camml_other |>
-  mutate(value = case_when(measurement == "O3" & units == "ppmV" ~ value * 1000,
-                           measurement == "VOC(pid)" & units == "IBeq_ppbV" ~ value,
-                           TRUE ~ value),
-         units = case_when(measurement == "O3" & units == "ppmV" ~ "ppbV",
-                           measurement == "VOC(pid)" & units == "IBeq_ppbV" ~ "ppbV",
-                           TRUE ~ units))
 
 # CHeck that our units are correct
-camml_other_units_fixed |>
-  count(measurement, units)
+camml_other_wide |>
+  distinct(across(ends_with("_units")))
 
 # Check that our rows are uniquely identified
 camml_other_units_fixed |>
