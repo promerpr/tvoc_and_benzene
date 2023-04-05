@@ -121,7 +121,9 @@ spod_bella = spod_bella_raw |>
             pid_type = PIDtype,
             data_type = "final",
             correct_loc = TRUE,
-            pad_name = "Vetting")
+            pad_name = "Vetting") |>
+  group_by(start_time) |>
+  slice_head(n = 1)
 ```
 
 
@@ -195,6 +197,33 @@ SPOD measurements (not the CAMML PID)
 spod_gcid_overlap = spod_gcid |>
   filter(is.finite(gc_id))
 write_csv(spod_gcid_overlap, "parsed_data/spod_overlap_data_gcid.csv")
+```
+
+```{r}
+spod_gcid_avg = spod_gcid_overlap |>
+  group_by(start_time_lst, end_time_lst, pad_name, deployment_name, gc_id) |>
+  summarize(sd_tvoc = sd(tvoc_ppb, na.rm = TRUE),
+            tvoc_ppb = mean(tvoc_ppb, na.rm = TRUE),
+            data_type = data_type[[1]],
+            correct_loc = all(correct_loc),
+            spod_temp = mean(spod_temp, na.rm = TRUE),
+            spod_rh = mean(spod_rh, na.rm = TRUE),
+            .groups = "drop")
+spod_gcid_bucket = spod_gcid_overlap |>
+  select(start_time, tvoc_ppb, start_time_lst, end_time_lst, gc_id) |>
+  mutate(gc_length = as.numeric(end_time_lst - start_time_lst),
+         bucket = floor(as.numeric(start_time - start_time_lst)/60/(gc_length/9))+1) |>
+  summarize(tvoc_ppb = mean(tvoc_ppb, na.rm = TRUE),
+            .by = c("gc_id", "bucket")) |>
+  pivot_wider(names_from = bucket, values_from = tvoc_ppb, names_prefix = "tvoc_ppb_")
+  
+spod_gcid_clean = left_join(spod_gcid_avg, spod_gcid_bucket, by = "gc_id")
+
+```
+
+```{r}
+write_csv(spod_gcid_clean, "parsed_data/spod_overlap_data_gcid_clean.csv")
+
 ```
 
 

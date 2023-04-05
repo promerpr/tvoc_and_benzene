@@ -1,3 +1,6 @@
+# This version is going to be mostly a repeat of the third pass, but using
+# the SPOD data
+
 library(tidyverse)
 library(rsample)
 library(lubridate)
@@ -13,6 +16,12 @@ library(vip)
 
 
 # First, load all the datasets that we'll want:
+camml_data_raw = read_csv("parsed_data/camml/camml_voc_data_gcid.csv")
+spod_data_raw = read_csv("parsed_data/spod_overlap_data_gcid_clean.csv")
+camml_other_raw = read_csv("parsed_data/camml/camml_other_data_wide_gcid.csv")
+
+inner_join(camml_data, spod_data_raw, by = "gc_id") |>
+  inner_join(camml_other_raw)
 data_for_modeling_raw = read_csv("parsed_data/camml/camml_combined_data.csv") #Aligned CAMML and SPOD data
 atc_conc_2017_raw = read_csv("../AirToxScreen/parsed_data_2017/co_concentration_by_sector.csv") #AirToxScreen 2017
 wide_camml_tvoc_wd_raw = read_csv("parsed_data/camml/camml_wide_spod_wind.csv") #Wind Direction and TVOC in 5-min intervals
