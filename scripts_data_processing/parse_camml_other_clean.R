@@ -36,11 +36,23 @@ read_other = function(fn) {
   df_long = pivot_longer(df_wide, cols = c(-contains("Time_"), -file_name),
                          names_to = c("measurement", "units"),
                          names_pattern = "^([^_]+)_\\[(.+)\\]$") |>
-    clean_names() %>%
-    mutate(start_time_lst = coalesce(mdy_hm(start_time_lst, tz = "MST"),
-                                     mdy_hms(start_time_lst, tz = "MST")),
-           end_time_lst = coalesce(mdy_hm(end_time_lst, tz = "MST"),
-                                   mdy_hms(end_time_lst, tz = "MST"))) |>
+    clean_names()
+
+  start_has_seconds = grepl(":.+:", df_long$start_time_lst[1])
+  end_has_seconds = grepl(":.+:", df_long$end_time_lst[1])
+  if (start_has_seconds) {
+    f_start = mdy_hms
+  } else {
+    f_start = mdy_hm
+  }
+  if (end_has_seconds) {
+    f_end = mdy_hms
+  } else {
+    f_end = mdy_hm
+  }
+  df_long = df_long |>
+    mutate(start_time_lst = f_start(start_time_lst, tz = "MST"),
+           end_time_lst = f_end(end_time_lst, tz = "MST")) |>
     add_deployment_id()
   df_long
 }
@@ -90,13 +102,23 @@ all_other_data_units_corrected |>
   summarize(sd = sd(value, na.rm = TRUE))
 
 # Next, pivot the data wider
+
 all_other_data_wide = all_other_data_units_corrected |>
-  pivot_wider(id_cols = c(start_time_lst, end_time_lst, file_name, deployment_id, deployment_name,
-                          pad_name, pad_lat, pad_lon, camml_lat, camml_lon, operational_phase,
-                          distance_to_source_ft, source_direction_degrees),
-              names_from = measurement,
-              values_from = c(value, units),
-              names_glue = "{measurement}_{.value}")
+  pivot_wider(names_from = c(measurement, units), values_from = value) |>
+  clean_names() |>
+  rename(nox_ppbv = n_ox_ppb_v,
+         wind_speed_ms = wind_speed_m_s,
+         p_barometric_mmhg = p_barometric_mm_hg,
+         solar_radiation_wm2 = solar_radiation_w_m2,
+         ch4_ppmv = ch4_ppm_v,
+         pm25_ugm3 = pm2_5_ltp_ug_m3 ,
+         pm10_ugm3  = pm10_ltp_ug_m3,
+         no_ppbv = no_ppb_v,
+         no2_ppbv = no2_ppb_v,
+         o3_ppbv = o3_ppb_v,
+         tvoc_pid_ppbv = voc_pid_ppb_v ,
+         co2_ppmv = co2_ppm_v) |>
+  arrange(deployment_id)
 
 all_other_data_wide |>
   group_by(start_time_lst) |>
@@ -105,12 +127,9 @@ all_other_data_wide |>
   count(deployment_id)
 # Ok, I think that's correct - we're seeing a slight overlap between 12 & 13 and a larger
 # overlap between 14 and 15
-all_other_data_wide_snake = all_other_data_wide |>
-  clean_names() |>
-  rename_with(\(x) str_remove_all(x, "_value")) |>
-  rename_with(\(x) str_remove_all(x, "_ltp")) |>
-  rename_with(\(x) str_replace_all(x, "2_5", "25")) |>
-  rename_with(\(x) str_replace_all(x, "n_ox", "nox"))
 
-write_csv(all_other_data_units_corrected, "parsed_data/camml/camml_other_data_long.csv")
-write_csv(all_other_data_wide_snake, "parsed_data/camml/camml_other_data_wide.csv")
+ggplot(all_other_data_wide, aes(x = start_time_lst, y= deployment_id)) +
+  geom_point()
+
+# write_csv(all_other_data_units_corrected, "parsed_data/camml/camml_other_data_long.csv")
+write_csv(all_other_data_wide, "parsed_data/camml/camml_other_data_wide.csv")

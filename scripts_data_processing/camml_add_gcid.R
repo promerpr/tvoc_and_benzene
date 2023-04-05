@@ -24,6 +24,7 @@ plot(camml_gc_runs$gc_id, camml_gc_runs$gc_deployment_id)
 
 # We're just going to do this manually with a for loop, rather than trying to be fancy with
 # data.table and roll joins.
+# (We could now do this with dplyr and join_by, but I think it's easier to keep the old approach)
 camml_other_wide_gcid = camml_other_wide |>
   mutate(gc_id = NA_integer_)
 pb <- progress_bar$new(total = nrow(camml_gc_runs))
@@ -108,8 +109,8 @@ camml_voc_gcid = left_join(camml_voc, camml_gc_runs, by = c("start_time_lst" = "
   select(-gc_end_time, -gc_deployment_id)
 
 # Check the only difference is adding a gc_id column
-waldo::compare(camml_voc_gcid, camml_voc)
-waldo::compare(camml_other_wide_gcid, camml_other_wide)
+waldo::compare(camml_voc, camml_voc_gcid)
+waldo::compare(camml_other_wide, camml_other_wide_gcid)
 
 # Write data to file
 write_csv(camml_other_wide_gcid, "parsed_data/camml/camml_other_data_wide_gcid.csv")
