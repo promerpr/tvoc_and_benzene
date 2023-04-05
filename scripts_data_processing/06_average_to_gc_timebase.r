@@ -44,7 +44,7 @@ camml_benzene = camml_voc |>
   pivot_wider(names_from = voc, values_from = concentration)
 
 combined_data =
-  inner_join(camml_benzene, camml_other_aligned2,
+  inner_join(camml_benzene, select(camml_other_aligned2, -start_time_lst, -end_time_lst),
              by= c("gc_id", "deployment_id", "deployment_name", "pad_name")) |>
   inner_join(spod_data_aligned,
              by= c("gc_id", "deployment_id", "deployment_name", "pad_name"))
@@ -76,8 +76,9 @@ wind_gcid_bucket = camml_other_wide |>
          .keep = "unused") |>
   pivot_wider(names_from = bucket, values_from = c(wind_speed, wind_direction))
 
-wind_gcid_bucket |>
-  slice_sample(n = 15)
-# spod_gcid_clean = left_join(spod_gcid_avg, spod_gcid_bucket, by = "gc_id")
-#
-# write_csv(spod_gcid_clean, "parsed_data/spod_overlap_data_gcid_clean.csv")
+wind_spod_buckets = full_join(spod_gcid_bucket, wind_gcid_bucket, by = "gc_id") |>
+  arrange(gc_id) |>
+  semi_join(combined_data, by = "gc_id")
+
+write_csv(combined_data, "parsed_data/combined_camml_spod_data.csv")
+write_csv(wind_spod_buckets, "parsed_data/wind_spod_buckets.csv")
